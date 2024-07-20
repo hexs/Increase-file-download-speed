@@ -6,11 +6,13 @@ import math
 import shutil
 import subprocess
 
-temp_dir = 'temp'
 proxies = {
     'http': subprocess.run('git config --global http.proxy', capture_output=True, text=True).stdout.strip(),
     'https': subprocess.run('git config --global https.proxy', capture_output=True, text=True).stdout.strip()
 }
+chunk_size = 1024 * 1024  # 1MB chunks
+num_processes = min(128, cpu_count())
+temp_dir = 'temp'
 
 
 # Function to download a chunk of the file
@@ -43,9 +45,6 @@ def show_progress(downloaded, total):
 
 # Main download function
 def download(url, filename):
-    chunk_size = 1024 * 1024  # 1MB chunks
-    num_processes = min(128, cpu_count())
-
     try:
         if not os.path.exists(temp_dir):
             os.makedirs(temp_dir)
@@ -96,7 +95,8 @@ def download(url, filename):
 
 if __name__ == '__main__':
     print('proxies', proxies)
-
-    url = 'https://downloads.raspberrypi.com/raspios_full_arm64/images/raspios_full_arm64-2024-07-04/2024-07-04-raspios-bookworm-arm64-full.img.xz'
-    filename = '2024-07-04-raspios-bookworm-arm64-full.img.xz'
-    download(url, filename)
+    print('num_processes', num_processes)
+    download(
+        'https://downloads.raspberrypi.com/raspios_full_arm64/images/raspios_full_arm64-2024-07-04/2024-07-04-raspios-bookworm-arm64-full.img.xz',
+        '2024-07-04-raspios-bookworm-arm64-full.img.xz'
+    )
