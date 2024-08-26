@@ -45,52 +45,57 @@ def show_progress(downloaded, total):
 
 # Main download function
 def download(url, filename):
-    try:
-        if not os.path.exists(temp_dir):
-            os.makedirs(temp_dir)
+    if filename in os.listdir():
+        return
+    if not os.path.exists(temp_dir):
+        os.makedirs(temp_dir)
 
-        # Get the total file size
-        response = requests.head(url, proxies=proxies)
-        response.raise_for_status()
-        total_size = int(response.headers.get('content-length', 0))
-        if total_size == 0:
-            print("Unable to determine file size. Exiting.")
-            return
+    # Get the total file size
+    response = requests.head(url, proxies=proxies)
+    response.raise_for_status()
+    total_size = int(response.headers.get('content-length', 0))
+    if total_size == 0:
+        print("Unable to determine file size. Exiting.")
+        return
 
-        print(f"Total file size: {total_size:,} bytes")
-        chunk_count = math.ceil(total_size / chunk_size)
+    print(f"Total file size: {total_size:,} bytes")
+    chunk_count = math.ceil(total_size / chunk_size)
 
+    chunks = [(i * chunk_size, min((i + 1) * chunk_size - 1, total_size - 1), i, url, filename)
+              for i in range(chunk_count)]
+
+    # check flie ที่โหลดมา ว่าครบไหม
+    while len(os.listdir(temp_dir)) < chunk_count:
         downloaded = 0
-        chunks = [(i * chunk_size, min((i + 1) * chunk_size - 1, total_size - 1), i, url, filename)
-                  for i in range(chunk_count)]
+        try:  # download ไฟล์มาก่อน หาก error ให้ข้ามไปก่อน
+            # Download chunks in parallel
+            with Pool(num_processes) as pool:
+                for size in pool.imap_unordered(download_chunk, chunks):
+                    downloaded += size
+                    show_progress(downloaded, total_size)
 
-        # Download chunks in parallel
-        with Pool(num_processes) as pool:
-            for size in pool.imap_unordered(download_chunk, chunks):
-                downloaded += size
-                show_progress(downloaded, total_size)
+        except Exception as e:
+            print(f"\nAn error occurred: {e}")
 
-        print("\n\nDownload completed. Combining chunks...")
+        print(f'  {len(os.listdir(temp_dir))}/{chunk_count}')
+    print()
+    print("Download completed. Combining chunks...")
 
-        # Combine chunks into a single file
-        with open(os.path.join(temp_dir, filename), 'wb') as outfile:
-            for i in range(chunk_count):
-                chunk_file = os.path.join(temp_dir, f"{filename}.part{i}")
-                if os.path.exists(chunk_file):
-                    with open(chunk_file, 'rb') as infile:
-                        shutil.copyfileobj(infile, outfile)
-                    os.remove(chunk_file)
+    # Combine chunks into a single file
+    with open(os.path.join(temp_dir, filename), 'wb') as outfile:
+        for i in range(chunk_count):
+            chunk_file = os.path.join(temp_dir, f"{filename}.part{i}")
+            if os.path.exists(chunk_file):
+                with open(chunk_file, 'rb') as infile:
+                    shutil.copyfileobj(infile, outfile)
+                os.remove(chunk_file)
+    print(f"File '{filename}' has been downloaded and assembled successfully in the '{temp_dir}' directory.")
 
-        print(f"File '{filename}' has been downloaded and assembled successfully in the '{temp_dir}' directory.")
-
-    except Exception as e:
-        print(f"An error occurred: {e}")
-    finally:
-        # Move the final file to the current directory
-        final_path = os.path.join(temp_dir, filename)
-        if os.path.exists(final_path):
-            shutil.move(final_path, filename)
-            print(f"File moved to current directory: {filename}")
+    # Move the final file to the current directory
+    final_path = os.path.join(temp_dir, filename)
+    if os.path.exists(final_path):
+        shutil.move(final_path, filename)
+        print(f"File moved to current directory: {filename}")
 
 
 if __name__ == '__main__':
@@ -99,4 +104,8 @@ if __name__ == '__main__':
     download(
         'https://downloads.raspberrypi.com/raspios_full_arm64/images/raspios_full_arm64-2024-07-04/2024-07-04-raspios-bookworm-arm64-full.img.xz',
         '2024-07-04-raspios-bookworm-arm64-full.img.xz'
+    )
+    download(
+        'https://downloads.raspberrypi.com/raspios_armhf/images/raspios_armhf-2024-07-04/2024-07-04-raspios-bookworm-armhf.img.xz',
+        '2024-07-04-raspios-bookworm-armhf.img.xz'
     )
